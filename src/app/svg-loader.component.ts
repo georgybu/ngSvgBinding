@@ -69,7 +69,7 @@ export class SvgLoaderComponent implements OnInit, AfterViewInit {
   }
 
   loadScheme(scheme) {
-    this.http.get(`/assets/${scheme}.svg`, {responseType: 'text'}).subscribe((response) => {
+    this.http.get(`./assets/${scheme}.svg`, {responseType: 'text'}).subscribe((response) => {
       this.scheme.nativeElement.innerHTML = response;
     });
   }
