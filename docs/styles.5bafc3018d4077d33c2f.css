@@ -1,0 +1,1 @@
+*{margin:0;padding:0}.flow{stroke-dasharray:8;-webkit-animation:.5s linear infinite dash;animation:.5s linear infinite dash}@-webkit-keyframes dash{to{stroke-dashoffset:-16}}@keyframes dash{to{stroke-dashoffset:-16}}svg{border:1px solid}
