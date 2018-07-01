@@ -1,11 +1,13 @@
 import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import * as d3Selection from 'd3-selection';
+import * as d3 from 'd3';
+import { Point, toPoints } from 'svg-points';
 
 @Component({
   selector: 'm-svg-loader',
   template: `
-    <button (click)="loadScheme('schema')">Scheme 1</button>
+    <button (click)="loadScheme('scheme')">Scheme 1</button>
     <button (click)="loadScheme('vcc')">Scheme 2</button>
     <div #scheme></div>
   `,
@@ -52,6 +54,36 @@ export class SvgLoaderComponent implements OnInit, AfterViewInit {
       type: `string`,
       value: null
     },
+    {
+      field: `openclose1`,
+      type: `switch`,
+      value: null // open|close
+    },
+    {
+      field: `openclose2`,
+      type: `switch`,
+      value: null // open|close
+    },
+    {
+      field: `openclose3`,
+      type: `switch`,
+      value: null // open|close
+    },
+    {
+      field: `openclose4`,
+      type: `switch`,
+      value: null // open|close
+    },
+    {
+      field: `openclose5`,
+      type: `switch`,
+      value: null // open|close
+    },
+    {
+      field: `openclose8`,
+      type: `switch`,
+      value: null // open|close
+    }
   ];
 
   constructor(private http: HttpClient) {
@@ -65,12 +97,14 @@ export class SvgLoaderComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {
-    this.loadScheme(`vcc`);
+    this.loadScheme(`scheme`);
   }
 
   loadScheme(scheme) {
     this.http.get(`./assets/${scheme}.svg`, {responseType: 'text'}).subscribe((response) => {
       this.scheme.nativeElement.innerHTML = response;
+      this.data = this.generateData();
+      this.updateData(this.data);
     });
   }
 
@@ -82,6 +116,9 @@ export class SvgLoaderComponent implements OnInit, AfterViewInit {
           break;
         case 'color':
           dataItem.value = this.getRandomColor();
+          break;
+        case 'switch':
+          dataItem.value = Math.random() > 0.5 ? 'close' : 'open';
           break;
         default:
           throw new Error(`Unknown data type ${JSON.stringify(dataItem)}`);
@@ -122,8 +159,28 @@ export class SvgLoaderComponent implements OnInit, AfterViewInit {
                 element.selectAll('path').style('stroke', dataItem.value);
               }
               break;
+            case 'switch':
+              console.group(`${JSON.stringify(dataItem)}`);
+              const switchElements = [];
+              element.selectAll('path').each((pathNodeData, pathI, pathNodes) => {
+                const el = <SVGGraphicsElement>pathNodes[pathI];
+                const elPoints = this.getPointsFromPath(el);
+                switchElements.push(el);
+                console.log(el, elPoints);
+              });
+              const openCloseElement = this.getOpenCloseElement(switchElements);
+              console.log(gElement, openCloseElement, this.getPointsFromPath(openCloseElement));
+
+              if (dataItem.value === 'open') {
+                this.openSwitch(openCloseElement);
+              }
+              if (dataItem.value === 'close') {
+                this.closeSwitch(openCloseElement);
+              }
+              console.groupEnd();
+              break;
             default:
-              throw new Error(`Unknown data type ${JSON.stringify(dataItem)}`);
+              throw new Error(`Unknown data type ${dataItem.type} for ${JSON.stringify(dataItem)}`);
           }
         }
       });
@@ -176,6 +233,92 @@ export class SvgLoaderComponent implements OnInit, AfterViewInit {
    */
   private getRandomInt(min, max): number {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  /**
+   * Get element, that we need to mutate
+   * @param {SVGGraphicsElement[]} paths
+   * @returns {SVGGraphicsElement | null}
+   */
+  private getOpenCloseElement(paths: SVGGraphicsElement[]): SVGGraphicsElement | null {
+    if (paths.length) {
+      // temporary return latest element
+      /*
+            if (paths.length !== 3) {
+              return paths[paths.length - 1];
+            } else {
+              // Math.floor(el.getBBox().y)
+              return paths[paths.length - 1];
+            }
+      */
+      return paths[paths.length - 1];
+    } else {
+      return null;
+    }
+  }
+
+  /**
+   * Get points from svg path
+   *      <path d="M0 799.2 L-24.12 799.2" class="st2"></path>
+   *
+   * @param {SVGGraphicsElement} path
+   * @returns {module:svg-points.Point[]}
+   */
+  private getPointsFromPath(path: SVGGraphicsElement): Point[] {
+    if (path.hasAttribute('d')) {
+      const d = path.getAttribute('d');
+      return toPoints({type: 'path', d});
+    } else {
+      return [];
+    }
+  }
+
+  /**
+   * Is element rotated
+   * @param {SVGGraphicsElement} g
+   * @returns {boolean}
+   */
+  private isRotated(g: SVGGraphicsElement): boolean {
+    if (g.hasAttribute('transform')) {
+      const transform = g.getAttribute('transform');
+      return transform.indexOf('rotate(90)') > -1;
+    } else {
+      return false;
+    }
+  }
+
+  private isOpen(path: SVGGraphicsElement): boolean | null {
+    const points = this.getPointsFromPath(path);
+    if (points.length) {
+      const y = points[0].y;
+      for (let i = 0; i < points.length; i++) {
+        if (points[i].y !== y) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private openSwitch(path: SVGGraphicsElement) {
+    this.changeSwitchState(path, 'open');
+  }
+
+  private closeSwitch(path: SVGGraphicsElement) {
+    this.changeSwitchState(path, 'close');
+  }
+
+  private changeSwitchState(path, state: 'open' | 'close') {
+    const points = this.getPointsFromPath(path);
+    if (points.length) {
+      const y = points[1].y;
+      const line = d3.line();
+      const data: [number, number][] = [[points[0].x, state === 'open' ? y - 5 : y], [points[1].x, y]];
+      d3.select(path)
+        .transition()
+        .duration(500)
+        .attr('d', line(data));
+    }
   }
 
 }
